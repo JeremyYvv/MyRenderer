@@ -89,10 +89,6 @@ void DrawTriangle_Old(Vec2i t1, Vec2i t2, Vec2i t3, TGAImage& stImage, const TGA
 		std::swap(stPointBottom, stPointMiddle);
 	}
 
-	/*DrawLine(t1.x, t1.y, t2.x, t2.y, stImage, stColor);
-	DrawLine(t1.x, t1.y, t3.x, t3.y, stImage, stColor);
-	DrawLine(t2.x, t2.y, t3.x, t3.y, stImage, stColor);*/
-
 	// calcalute slope of line top-middle/top-bottom/middle-bottom
 	float fSlopeTM = (float)(stPointTop.x - stPointMiddle.x) / (stPointTop.y - stPointMiddle.y);
 	float fSlopeTB = (float)(stPointTop.x - stPointBottom.x) / (stPointTop.y - stPointBottom.y);
@@ -248,15 +244,46 @@ void Test4_DrawPolygon_New(void)
     image.write_tga_file("output_4.tga");
 }
 
+void Test5_DrawFlatWithLight(void)
+{
+    const int width = 800;
+    const int height = 800;
+    TGAImage image(width, height, TGAImage::RGB);
+
+    Vec3f light_dir(0,0,-1); // define light_dir
+    std::shared_ptr<Model> pModel = std::make_shared<Model>("./african_head.obj");
+    for (int i = 0; i < pModel->nfaces(); i++) {
+        std::vector<int> face = pModel->face(i);
+        Vec2i screen_coords[3];
+        Vec3f world_coords[3];
+        for (int j=0; j<3; j++) {
+            Vec3f v = pModel->vert(face[j]);
+            screen_coords[j] = Vec2i((v.x+1.)*width/2., (v.y+1.)*height/2.);
+            world_coords[j]  = v;
+        }
+        Vec3f n = (world_coords[2]-world_coords[0]) ^ (world_coords[1]-world_coords[0]);
+        n.normalize();
+        float intensity = n*light_dir;
+        if (intensity>0) {
+            DrawTriangle_New(screen_coords[0], screen_coords[1], screen_coords[2], image, TGAColor(intensity*255, intensity*255, intensity*255, 255));
+        }
+    }
+
+    image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
+    image.write_tga_file("output_5.tga");
+}
+
 int main(int argc, char** argv) 
 {
-    Test1_DrawLines();
+//    Test1_DrawLines();
 
-    Test2_DrawWireMesh();
+//    Test2_DrawWireMesh();
 
-    Test3_DrawPolygon_Old();
+//    Test3_DrawPolygon_Old();
 
-    Test4_DrawPolygon_New();
+//    Test4_DrawPolygon_New();
+
+    Test5_DrawFlatWithLight();
 
 	return 0;
 }
