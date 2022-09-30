@@ -1,6 +1,7 @@
 ﻿#include "tgaImage.h"
 #include "model.h"
 #include <memory>
+#include <limits>
 
 typedef struct tagPoint
 {
@@ -61,6 +62,11 @@ void DrawLine(int x1, int y1, int x2, int y2, TGAImage& stImage, const TGAColor&
 	}
 }
 
+void DrawLine(Vec2i t1, Vec2i t2, TGAImage &stImage, const TGAColor &stColor)
+{
+    DrawLine(t1.x, t1.y, t2.x, t2.y, stImage, stColor);
+}
+
 void DrawTriangle_Old(Vec2i t1, Vec2i t2, Vec2i t3, TGAImage& stImage, const TGAColor& stColor)
 {
 	// draw triangles along y-axis
@@ -113,23 +119,23 @@ void DrawTriangle_Old(Vec2i t1, Vec2i t2, Vec2i t3, TGAImage& stImage, const TGA
 
 // chech whether point P is inside triangle composed by point A/B/C
 // method: by cross product
-bool IsPointInsideTriangle(Vec2i stPointP, Vec2i stVertexA, Vec2i stVertexB, Vec2i stVertexC)
+bool IsPointInsideTriangle(Vec2f stPointP, Vec2f stVertexA, Vec2f stVertexB, Vec2f stVertexC)
 {
     bool bIsInside = false;
 
     do
     {
-        Vec2i stVecBP = stPointP - stVertexB;
-        Vec2i stVecBA = stVertexA - stVertexB;
-        Vec2i stVecAP = stPointP - stVertexA;
-        Vec2i stVecAC = stVertexC - stVertexA;
-        Vec2i stVecCP = stPointP - stVertexC;
-        Vec2i stVecCB = stVertexB - stVertexC;
+        Vec2f stVecBP = stPointP - stVertexB;
+        Vec2f stVecBA = stVertexA - stVertexB;
+        Vec2f stVecAP = stPointP - stVertexA;
+        Vec2f stVecAC = stVertexC - stVertexA;
+        Vec2f stVecCP = stPointP - stVertexC;
+        Vec2f stVecCB = stVertexB - stVertexC;
 
         // bp x ba
-        int iNormal1 = stVecBP.x * stVecBA.y - stVecBP.y * stVecBA.x;
-        int iNormal2 = stVecAP.x * stVecAC.y - stVecAP.y * stVecAC.x;
-        int iNormal3 = stVecCP.x * stVecCB.y - stVecCP.y * stVecCB.x;
+        float iNormal1 = stVecBP.x * stVecBA.y - stVecBP.y * stVecBA.x;
+        float iNormal2 = stVecAP.x * stVecAC.y - stVecAP.y * stVecAC.x;
+        float iNormal3 = stVecCP.x * stVecCB.y - stVecCP.y * stVecCB.x;
 
         if (iNormal1 >= 0 && iNormal2 >= 0 && iNormal3 >= 0)
         {
@@ -159,8 +165,53 @@ void DrawTriangle_New(Vec2i t1, Vec2i t2, Vec2i t3, TGAImage& stImage, const TGA
         for (int iDrawX = iBoundLeft; iDrawX <= iBoundRight; ++iDrawX)
         {
             Vec2i stPointP(iDrawX, iDrawY);
-            if (IsPointInsideTriangle(stPointP, t1, t2, t3))
+//            if (IsPointInsideTriangle(stPointP, t1, t2, t3))
+//            {
+//                stImage.set(iDrawX, iDrawY, stColor);
+//            }
+        }
+    }
+}
+
+void DrawTriangleWitZBuffer(Vec3f v1, Vec3f v2, Vec3f v3, float *fZBuffer, TGAImage &stImage, const TGAColor &stColor)
+{
+    // get bounding box borders
+    int iBoundLeft = std::min(std::min(v1.x, v2.x), v3.x);
+    int iBoundRight = std::max(std::max(v1.x, v2.x), v3.x);
+    int iBoundTop = std::max(std::max(v1.y, v2.y), v3.y);
+    int iBoundBottom = std::min(std::min(v1.y, v2.y), v3.y);
+
+    int iWidth = stImage.get_width();
+
+//    a = ( (p2.y-p1.y)*(p3.z-p1.z)-(p2.z-p1.z)*(p3.y-p1.y) );
+
+//    b = ( (p2.z-p1.z)*(p3.x-p1.x)-(p2.x-p1.x)*(p3.z-p1.z) );
+
+//    c = ( (p2.x-p1.x)*(p3.y-p1.y)-(p2.y-p1.y)*(p3.x-p1.x) );
+
+//    d = ( 0-(a*p1.x+b*p1.y+c*p1.z) );
+
+    // planer equation: Ax + By + Cz + D = 0;
+    double A = (v2.y - v1.y) * (v3.z - v1.z) - (v2.z - v1.z) * (v3.y - v1.y);
+    double B = (v2.z - v1.z) * (v3.x - v1.x) - (v2.x - v1.x) * (v3.z - v1.z);
+    double C = (v2.x - v1.x) * (v3.y - v1.y) - (v2.y - v1.y) * (v3.x - v3.x);
+    double D = (0 - (A * v1.x + B * v1.y + C * v1.z));
+
+    // check every pixel in bounding box, if in the triangle, draw it
+    for (int iDrawY = iBoundTop; iDrawY >= iBoundBottom; --iDrawY)
+    {
+        for (int iDrawX = iBoundLeft; iDrawX <= iBoundRight; ++iDrawX)
+        {
+            Vec2f stPointP(iDrawX, iDrawY);
+            double dDrawZ = (0 - (A * iDrawX + B * iDrawY + D)) / C;
+
+            Vec2f stPoint1(v1.x, v1.y);
+            Vec2f stPoint2(v2.x, v2.y);
+            Vec2f stPoint3(v3.x, v3.y);
+            if (IsPointInsideTriangle(stPointP, stPoint1, stPoint2, stPoint3) &&
+                fZBuffer[iWidth * iDrawY + iDrawX] < dDrawZ)
             {
+                fZBuffer[iWidth * iDrawY + iDrawX] = dDrawZ;
                 stImage.set(iDrawX, iDrawY, stColor);
             }
         }
@@ -171,6 +222,7 @@ void DrawTriangle_New(Vec2i t1, Vec2i t2, Vec2i t3, TGAImage& stImage, const TGA
 const TGAColor white = TGAColor(255, 255, 255, 255);
 const TGAColor red = TGAColor(255, 0, 0, 255);
 const TGAColor green = TGAColor(0, 255, 0, 255);
+const TGAColor blue = TGAColor(0, 0,255, 255);
 
 void Test1_DrawLines(void)
 {
@@ -250,7 +302,7 @@ void Test5_DrawFlatWithLight(void)
     const int height = 800;
     TGAImage image(width, height, TGAImage::RGB);
 
-    Vec3f light_dir(0,0,-1); // define light_dir
+    Vec3f light_dir(0,0,1); // define light_dir
     std::shared_ptr<Model> pModel = std::make_shared<Model>("./african_head.obj");
     for (int i = 0; i < pModel->nfaces(); i++) {
         std::vector<int> face = pModel->face(i);
@@ -261,7 +313,8 @@ void Test5_DrawFlatWithLight(void)
             screen_coords[j] = Vec2i((v.x+1.)*width/2., (v.y+1.)*height/2.);
             world_coords[j]  = v;
         }
-        Vec3f n = (world_coords[2]-world_coords[0]) ^ (world_coords[1]-world_coords[0]);
+        // cross product to get normal
+        Vec3f n = (world_coords[1]-world_coords[0])^(world_coords[2]-world_coords[0]);
         n.normalize();
         float intensity = n*light_dir;
         if (intensity>0) {
@@ -271,6 +324,50 @@ void Test5_DrawFlatWithLight(void)
 
     image.flip_vertically(); // i want to have the origin at the left bottom corner of the image
     image.write_tga_file("output_5.tga");
+}
+
+void Test6_DrawFlatWithZBuffer(void)
+{
+    const int width = 800;
+    const int height = 800;
+    TGAImage image(width, height, TGAImage::RGB);
+
+    float *pZBuffer = new float[width * height];
+    for (int i = 0; i < width * height; ++i)
+    {
+        pZBuffer[i] = std::numeric_limits<int>::min();
+    }
+
+    Vec3f light_dir(0, 0, 1); // define light_dir
+    std::shared_ptr<Model> pModel = std::make_shared<Model>("./african_head.obj");
+    for (int i = 0; i < pModel->nfaces(); i++)
+    {
+        std::vector<int> face = pModel->face(i);
+        Vec3f screen_coords[3];
+        Vec3f world_coords[3];
+        for (int j = 0; j < 3; j++)
+        {
+            Vec3f v = pModel->vert(face[j]);
+            // change range from [-1, 1] to [0, width or height]
+            screen_coords[j] = Vec3f((v.x+1.) * width/2., (v.y+1.)*height/2., v.z);
+            world_coords[j]  = v;
+        }
+        // cross product to get normal
+        Vec3f n = (world_coords[1]-world_coords[0])^(world_coords[2]-world_coords[0]);
+        n.normalize();
+        float intensity = n * light_dir;
+        if (intensity > 0)
+        {
+            DrawTriangleWitZBuffer(screen_coords[0], screen_coords[1], screen_coords[2],
+                                   pZBuffer, image, TGAColor(intensity*255, intensity*255, intensity*255, 255));
+        }
+    }
+
+    delete pZBuffer;
+    pZBuffer = nullptr;
+
+    image.flip_vertically();
+    image.write_tga_file("output_6.tga");
 }
 
 int main(int argc, char** argv) 
@@ -283,7 +380,9 @@ int main(int argc, char** argv)
 
 //    Test4_DrawPolygon_New();
 
-    Test5_DrawFlatWithLight();
+//    Test5_DrawFlatWithLight();
+
+    Test6_DrawFlatWithZBuffer();
 
 	return 0;
 }
